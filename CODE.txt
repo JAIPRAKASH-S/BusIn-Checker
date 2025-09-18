@@ -1,0 +1,60 @@
+#include <SPI.h>
+#include <MFRC522.h>
+
+#define RST_PIN 9
+#define SS_PIN 10
+
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+struct BusCard {
+  byte uid[4];
+  bool entered;
+};
+
+BusCard buses[3] = {
+  {{0xDE, 0xAD, 0xBE, 0xEF}, false},
+  {{0xCA, 0xFE, 0xBA, 0xBE}, false},
+  {{0x12, 0x34, 0x56, 0x78}, false}
+};
+
+void setup() {
+  Serial.begin(9600);
+  SPI.begin();
+  rfid.PCD_Init();
+  Serial.println("Scan RFID card...");
+}
+
+void loop() {
+  // Look for new cards
+  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial())
+    return;
+
+  byte* scannedUID = rfid.uid.uidByte;
+  byte scannedSize = rfid.uid.size;
+
+  // Check if UID matches any known bus card
+  for (int i = 0; i < 3; i++) {
+    if (compareUID(scannedUID, buses[i].uid, scannedSize)) {
+      if (!buses[i].entered) {
+        Serial.println("Bus 1 entered");
+        buses[i].entered = true;
+      } else {
+        Serial.println("Bus 1 exited");
+        buses[i].entered = false;
+      }
+      break;
+    }
+  }
+
+  rfid.PICC_HaltA();   // Stop reading
+  rfid.PCD_StopCrypto1();
+  delay(1000); // Avoid double reads
+}
+
+bool compareUID(byte* uid1, byte* uid2, byte size) {
+  for (byte i = 0; i < size; i++) {
+    if (uid1[i] != uid2[i])
+      return false;
+  }
+  return true;
+}
